@@ -96,6 +96,20 @@ RULES = [
         },
         "priority": 3
     },
+    {
+        "id": "R0",
+        "category": "Academic Status",
+        "name": "Needs Attention",
+        "conditions": {
+            "gpa": {"min": 0.0}
+        },
+        "output": {
+            "type": "Academic Status",
+            "message": "Needs Attention",
+            "explanation": "The student does not fully meet criteria for defined academic categories and requires closer evaluation."
+        },
+        "priority": 1
+    },
     
     # -------------------------------------------------------------------------
     # 2. BEHAVIORAL ADVICE RULES (R6–R10)
@@ -230,6 +244,21 @@ RULES = [
             "type": "Critical Alert",
             "message": "Attendance Intervention — Risk of automatic course failure; contact student immediately.",
             "explanation": "Attendance below 60% puts the student at risk of automatic course failure per attendance policy."
+        },
+        "priority": 5
+    },
+    
+    {
+        "id": "R_low_attendance",
+        "category": "Critical Condition",
+        "name": "Low Attendance Warning",
+        "conditions": {
+            "attendance": {"max": 70}
+        },
+        "output": {
+            "type": "Critical Alert",
+            "message": "Low Attendance Warning — Attendance is significantly below the recommended threshold and may impact academic performance.",
+            "explanation": "Attendance below 70% may negatively impact academic performance."
         },
         "priority": 5
     },

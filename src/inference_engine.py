@@ -342,7 +342,14 @@ class DecisionAggregator:
         Returns only ONE status.
         """
         if not status_rules:
-            return None
+            # Gracefully fallback if no standard status rule matched.
+            return {
+                "rule_id": "R0",
+                "name": "Needs Attention",
+                "message": "Needs Attention",
+                "explanation": "The student does not fully meet criteria for defined academic categories and requires closer evaluation.",
+                "priority": 1
+            }
         
         # Sort by priority (higher number = higher priority)
         status_rules.sort(key=lambda r: r.priority, reverse=True)
@@ -380,11 +387,38 @@ class DecisionAggregator:
             # Sort by priority to get the most important status
             status_rules.sort(key=lambda r: r.priority, reverse=True)
             best_status = status_rules[0]
-            narrative_parts.append(
+            status_message = best_status.output.get('message', 'Unknown')
+            status_reason = best_status.output.get('explanation', '')
+
+            paragraph = (
                 f"Based on your GPA of {inputs.get('gpa', 'N/A')} and attendance of {inputs.get('attendance', 'N/A')}%, "
-                f"you have been classified as: {best_status.output.get('message', 'Unknown')}. "
-                f"{best_status.output.get('explanation', '')}"
+                f"you have been classified as: {status_message}."
             )
+            if status_reason:
+                paragraph += f" {status_reason}"
+
+            if best_status.rule_id == "R0":
+                fallback_reasons = []
+                attendance_value = inputs.get('attendance', 100)
+                gpa_value = inputs.get('gpa', 0.0)
+                if attendance_value < 80:
+                    fallback_reasons.append("attendance below 80%")
+                if gpa_value < 3.0:
+                    fallback_reasons.append("GPA below 3.0")
+                if not inputs.get('assignment_completion', True):
+                    fallback_reasons.append("incomplete assignments")
+                if fallback_reasons:
+                    paragraph += (
+                        " The fallback status is used because of "
+                        + ", ".join(fallback_reasons)
+                        + "."
+                    )
+                else:
+                    paragraph += (
+                        " The fallback status is used because the student does not fit any standard academic category thresholds."
+                    )
+
+            narrative_parts.append(paragraph)
         
         # 2. Critical Conditions
         if critical_rules:
