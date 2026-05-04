@@ -271,6 +271,13 @@ class DecisionAggregator:
         
         # Resolve final status - only ONE from status rules (highest priority wins)
         result.final_status = self._resolve_academic_status(status_rules_fired)
+
+        primary_issue = self._detect_primary_issue(critical_rules_fired, inputs)
+        result.advice_list = self._align_advice_with_primary_issue(
+            result.advice_list,
+            primary_issue,
+            inputs
+        )
         
         # Generate human-readable reasoning narrative
         result.reasoning_narrative = self._generate_reasoning_narrative(
@@ -278,7 +285,8 @@ class DecisionAggregator:
             critical_rules_fired,
             advice_rules_fired,
             recognition_rules_fired,
-            inputs
+            inputs,
+            primary_issue
         )
         
         return result
@@ -362,6 +370,66 @@ class DecisionAggregator:
             "explanation": best.output.get("explanation", ""),
             "priority": best.priority
         }
+
+    def _detect_primary_issue(self, critical_rules: list[RuleFired], inputs: dict) -> Optional[str]:
+        """Identify the highest-priority issue that advice should address first."""
+        if not critical_rules:
+            attendance = inputs.get("attendance", 100)
+            if attendance < 80:
+                return "attendance"
+            if not inputs.get("assignment_completion", True):
+                return "assignment"
+            if inputs.get("gpa", 0.0) < 3.0:
+                return "gpa"
+            return None
+
+        issue_priority = {
+            "attendance": 3,
+            "assignment": 2,
+            "gpa": 1,
+        }
+        detected_issues = []
+
+        for rule in critical_rules:
+            searchable_text = " ".join([
+                rule.name,
+                rule.output.get("message", ""),
+                rule.output.get("explanation", ""),
+                rule.explanation,
+                " ".join(condition.field_name for condition in rule.conditions_met),
+            ]).lower()
+
+            for issue, priority in issue_priority.items():
+                if issue in searchable_text:
+                    detected_issues.append((rule.priority, priority, issue))
+
+        if not detected_issues:
+            return None
+
+        detected_issues.sort(reverse=True)
+        return detected_issues[0][2]
+
+    def _align_advice_with_primary_issue(
+        self,
+        advice_list: list[dict],
+        primary_issue: Optional[str],
+        inputs: dict
+    ) -> list[dict]:
+        """Make displayed advice match the highest-priority detected issue."""
+        if primary_issue == "attendance":
+            attendance = inputs.get("attendance", 0)
+            return [{
+                "rule_id": "aligned_attendance_advice",
+                "name": "Attendance Improvement",
+                "message": (
+                    f"Improve class attendance from {attendance}% to at least 80% "
+                    "to ensure consistent learning, while maintaining your current study habits."
+                ),
+                "explanation": "Attendance is the highest-priority detected issue, so advice prioritizes attendance improvement.",
+                "reason": "Advice aligned with the primary attendance issue."
+            }]
+
+        return advice_list
     
     def _generate_reasoning_narrative(
         self,
@@ -369,89 +437,127 @@ class DecisionAggregator:
         critical_rules: list[RuleFired],
         advice_rules: list[RuleFired],
         recognition_rules: list[RuleFired],
-        inputs: dict
+        inputs: dict,
+        primary_issue: Optional[str] = None
     ) -> str:
         """
-        Generate a human-readable reasoning narrative that combines all fired rules.
-        
-        The narrative follows a logical flow:
-        1. Academic status conclusion
-        2. Critical conditions (if any)
-        3. Advice (if any)
-        4. Recognitions (if any)
+        Generate a clear, structured explanation of the student's academic situation.
+
+        Structure:
+        1. Academic evaluation (GPA and attendance assessment)
+        2. Main issue (primary concern or strength)
+        3. Impact (consequences or implications)
+        4. Recommendation (specific actionable advice)
         """
-        narrative_parts = []
-        
-        # 1. Academic Status
+        gpa = inputs.get('gpa', 0.0)
+        attendance = inputs.get('attendance', 100)
+        assignment_completion = inputs.get('assignment_completion', True)
+
+        # Determine academic status
+        status_message = "Unknown"
         if status_rules:
-            # Sort by priority to get the most important status
             status_rules.sort(key=lambda r: r.priority, reverse=True)
-            best_status = status_rules[0]
-            status_message = best_status.output.get('message', 'Unknown')
-            status_reason = best_status.output.get('explanation', '')
+            status_message = status_rules[0].output.get('message', 'Unknown')
 
-            paragraph = (
-                f"Based on your GPA of {inputs.get('gpa', 'N/A')} and attendance of {inputs.get('attendance', 'N/A')}%, "
-                f"you have been classified as: {status_message}."
-            )
-            if status_reason:
-                paragraph += f" {status_reason}"
+        # Build structured explanation
+        explanation_parts = []
 
-            if best_status.rule_id == "R0":
-                fallback_reasons = []
-                attendance_value = inputs.get('attendance', 100)
-                gpa_value = inputs.get('gpa', 0.0)
-                if attendance_value < 80:
-                    fallback_reasons.append("attendance below 80%")
-                if gpa_value < 3.0:
-                    fallback_reasons.append("GPA below 3.0")
-                if not inputs.get('assignment_completion', True):
-                    fallback_reasons.append("incomplete assignments")
-                if fallback_reasons:
-                    paragraph += (
-                        " The fallback status is used because of "
-                        + ", ".join(fallback_reasons)
-                        + "."
-                    )
-                else:
-                    paragraph += (
-                        " The fallback status is used because the student does not fit any standard academic category thresholds."
-                    )
+        # 1. Academic Evaluation
+        if gpa >= 3.5 and attendance >= 90:
+            evaluation = f"The student has an excellent GPA of {gpa} and attendance at {attendance}%, indicating strong academic performance."
+        elif gpa >= 3.0 and attendance >= 80:
+            evaluation = f"The student has a good GPA of {gpa} with attendance at {attendance}%, showing solid academic performance."
+        elif gpa >= 2.5:
+            evaluation = f"The student has a satisfactory GPA of {gpa}, but there is room for improvement in academic performance."
+        elif gpa >= 2.0:
+            evaluation = f"The student has a marginal GPA of {gpa}, indicating early warning signs that require attention."
+        else:
+            evaluation = f"The student has a low GPA of {gpa}, indicating serious academic risk requiring immediate intervention."
 
-            narrative_parts.append(paragraph)
-        
-        # 2. Critical Conditions
+        explanation_parts.append(evaluation)
+
+        # 2. Main Issue & 3. Impact
+        issues_and_impacts = []
+
         if critical_rules:
-            critical_msgs = [r.output.get("message", "") for r in critical_rules]
-            narrative_parts.append(
-                f"⚠️ CRITICAL: The following conditions require immediate attention: {', '.join(critical_msgs)}."
-            )
+            critical_issues = []
             for rule in critical_rules:
-                narrative_parts.append(f"   • {rule.output.get('explanation', '')}")
-        
-        # 3. Advice
-        if advice_rules:
-            advice_msgs = [r.output.get("message", "") for r in advice_rules]
-            narrative_parts.append(
-                f"📋 RECOMMENDATIONS: Consider the following advice: {', '.join(advice_msgs)}."
-            )
-            for rule in advice_rules:
-                narrative_parts.append(f"   • {rule.output.get('explanation', '')}")
-        
-        # 4. Recognitions
-        if recognition_rules:
-            recognition_msgs = [r.output.get("message", "") for r in recognition_rules]
-            narrative_parts.append(
-                f"🏆 RECOGNITION: Congratulations on the following achievements: {', '.join(recognition_msgs)}!"
-            )
+                msg = rule.output.get("message", "")
+                if "attendance" in msg.lower():
+                    critical_issues.append(f"attendance at {attendance}% is below the recommended level")
+                elif "assignment" in msg.lower():
+                    critical_issues.append("incomplete assignment completion")
+                elif "gpa" in msg.lower() or "probation" in msg.lower():
+                    critical_issues.append(f"GPA of {gpa} indicates academic probation level")
+
+            if critical_issues:
+                if primary_issue == "attendance":
+                    other_issues = [
+                        issue for issue in critical_issues
+                        if "attendance" not in issue.lower()
+                    ]
+                    main_issue = f"However, the main issue is attendance at {attendance}%, which is below the recommended level."
+                    if other_issues:
+                        main_issue += f" Additional concerns include {', and '.join(other_issues)}."
+                else:
+                    main_issue = f"However, {', and '.join(critical_issues)}."
+                impact = "This may affect learning consistency and academic progress."
+                issues_and_impacts.extend([main_issue, impact])
+
+        elif primary_issue == "attendance":
+            main_issue = f"However, the main issue is attendance at {attendance}%, which is below the recommended level."
+            impact = "This may affect learning consistency and academic progress."
+            issues_and_impacts.extend([main_issue, impact])
+
+        elif recognition_rules and not critical_rules:
+            # Only show recognition if there are no critical issues
+            recognition_parts = []
             for rule in recognition_rules:
-                narrative_parts.append(f"   • {rule.output.get('explanation', '')}")
-        
+                msg = rule.output.get("message", "")
+                if " — " in msg:
+                    # Extract just the main recognition title
+                    title = msg.split(" — ")[0]
+                    recognition_parts.append(title.lower())
+            
+            if recognition_parts:
+                main_issue = f"Additionally, {', '.join(recognition_parts)}."
+                issues_and_impacts.append(main_issue)
+
+        # 4. Recommendation
+        recommendations = []
+
+        if primary_issue == "attendance":
+            recommendations.append(
+                f"Improve class attendance from {attendance}% to at least 80% to ensure consistent learning, while maintaining current study habits."
+            )
+        elif advice_rules:
+            # Take only the most relevant advice (highest priority)
+            advice_rules.sort(key=lambda r: r.priority, reverse=True)
+            best_advice = advice_rules[0].output.get("message", "")
+            if best_advice:
+                recommendations.append(best_advice)
+
+        if not recommendations and critical_rules:
+            if gpa < 2.0:
+                recommendations.append("Immediate academic intervention is required, including tutoring and counseling.")
+            elif attendance < 80:
+                recommendations.append("Focus on improving attendance and maintaining consistent study habits.")
+            elif not assignment_completion:
+                recommendations.append("Complete all assignments and establish better time management practices.")
+
         # Combine all parts
-        if not narrative_parts:
-            return "No rules were triggered based on the provided inputs."
-        
-        return " ".join(narrative_parts)
+        final_parts = [evaluation]
+
+        if issues_and_impacts:
+            final_parts.extend(issues_and_impacts)
+
+        if recommendations:
+            rec_text = recommendations[0]
+            final_parts.append(f"This places the student in the '{status_message}' category. {rec_text}")
+        else:
+            final_parts.append(f"This places the student in the '{status_message}' category.")
+
+        return " ".join(final_parts)
 
 
 # =============================================================================

@@ -126,7 +126,7 @@ RULES = [
         },
         "output": {
             "type": "Advice",
-            "message": "Consistent Performer — Maintain current habits; consider exploring advanced topics.",
+            "message": "Consistent Performer — Maintain your strong study habits and assignment completion; consider joining advanced study groups or taking on leadership roles in academic projects.",
             "explanation": "High study hours (4+) combined with completed assignments indicates consistent performance habits."
         },
         "priority": 2
@@ -142,7 +142,7 @@ RULES = [
         },
         "output": {
             "type": "Advice",
-            "message": "Needs Motivation — Prioritize completing assignments; seek tutoring for time management.",
+            "message": "Needs Motivation — Focus on completing all assignments by setting daily submission goals; schedule a meeting with your academic advisor to develop a time management plan and identify barriers to assignment completion.",
             "explanation": "Despite high study hours, incomplete assignments suggest motivation or submission issues."
         },
         "priority": 2
@@ -158,7 +158,7 @@ RULES = [
         },
         "output": {
             "type": "Advice",
-            "message": "Moderate Effort — Increase study time gradually; your attendance is strong.",
+            "message": "Moderate Effort — Gradually increase your daily study hours from current levels to at least 4 hours; maintain your strong attendance while incorporating more active learning techniques like practice problems and group discussions.",
             "explanation": "Moderate study hours (2-4) with strong attendance indicate room for improvement in study intensity."
         },
         "priority": 2
@@ -174,7 +174,7 @@ RULES = [
         },
         "output": {
             "type": "Advice",
-            "message": "Efficient Learner — You work smart; consider adding study hours to reach your full potential.",
+            "message": "Efficient Learner — Maintain your efficient study habits while gradually increasing study hours to 3-4 per day; focus on deepening understanding through additional practice problems and peer discussions to maximize your academic potential.",
             "explanation": "Low study hours but completed assignments suggest efficient learning strategies."
         },
         "priority": 2
@@ -190,7 +190,7 @@ RULES = [
         },
         "output": {
             "type": "Advice",
-            "message": "At Risk Behavior — Immediate intervention needed; schedule meeting with academic advisor.",
+            "message": "At Risk Behavior — Immediately increase study hours to at least 3 per day and complete all pending assignments; schedule an urgent meeting with your academic advisor to create an intervention plan and connect with tutoring services.",
             "explanation": "Low study hours and incomplete assignments indicate at-risk academic behavior requiring immediate attention."
         },
         "priority": 2
